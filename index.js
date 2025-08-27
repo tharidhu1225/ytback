@@ -3,47 +3,40 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
-
-import { getInfo, downloadMp4, downloadMp3 } from './controllers/mediaController.js';
+import { config } from './config/config.js';
+import { infoLimiter } from './middleware/rateLimit.js';
+import mediaRouter from './routes/mediaRouter.js';
 
 const app = express();
-
-// Trust proxy for rate limiting behind proxies (like Render)
 app.set('trust proxy', 1);
 
-// Middleware
 app.use(helmet());
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
-app.use(cors());
 
-// Rate limit for info route (adjust as needed)
-const infoLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 mins
-  max: 10,
-  message: { error: 'Too many requests, slow down.' },
-});
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (config.corsOrigin.includes('*') || config.corsOrigin.includes(origin)) {
+      return cb(null, true);
+    }
+    return cb(new Error('Not allowed by CORS'));
+  }
+}));
+
+app.get('/', (_req, res) => res.send('▶ YouTube Downloader API is live'));
+
 app.use('/api/info', infoLimiter);
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Routes
-app.get('/api/info', getInfo);
-app.get('/api/download/mp4', downloadMp4);
-app.get('/api/download/mp3', downloadMp3);
+app.use('/api', mediaRouter);
 
-app.get('/', (req, res) => res.json({ status: 'ok' }));
-
-// 404
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err);
+app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err.message);
   res.status(500).json({ error: 'Server error' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const port = config.port || process.env.PORT || 5000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
