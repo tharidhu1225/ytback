@@ -1,4 +1,4 @@
-import ytdl from 'ytdl-core';
+import ytdl from '@distube/ytdl-core';
 import ffmpeg from 'fluent-ffmpeg';
 import NodeCache from 'node-cache';
 import contentDisposition from 'content-disposition';
